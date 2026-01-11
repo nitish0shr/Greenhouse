@@ -179,14 +179,7 @@ app.include_router(graph_webhooks.router, prefix="/api/graph", tags=["Graph Webh
 @app.get("/", response_class=HTMLResponse, tags=["Root"])
 async def root(request: Request):
     """Landing page with system overview and quick actions."""
-    from sqlalchemy import func, select
-    from app.database import async_engine
-    from app.models.application import Application
-    from app.models.human_review import HumanReviewQueue
-    from app.models.job_config import JobConfig
-    import redis.asyncio as redis_client
-    
-    # Get stats
+    # Default stats (used if database isn't available)
     stats = {
         "total_applications": 0,
         "avg_processing_time": "< 30s",
@@ -194,7 +187,7 @@ async def root(request: Request):
         "pending_reviews": 0,
     }
     
-    # Get health status
+    # Default health status
     health = {
         "api": True,
         "database": False,
@@ -203,9 +196,14 @@ async def root(request: Request):
         "worker_count": 0,
     }
     
-    # Check database and get stats
+    # Try to get database stats (gracefully handle if DB not available)
     try:
+        from sqlalchemy import func, select
         from app.database import AsyncSessionLocal
+        from app.models.application import Application
+        from app.models.human_review import HumanReviewQueue
+        from app.models.job_config import JobConfig
+        
         async with AsyncSessionLocal() as session:
             stats["total_applications"] = await session.scalar(
                 select(func.count(Application.id))
@@ -218,27 +216,20 @@ async def root(request: Request):
                 .where(HumanReviewQueue.status == "pending")
             ) or 0
             health["database"] = True
-    except Exception as e:
-        pass  # Database not connected
+    except Exception as db_error:
+        logger.debug(f"Database not available: {db_error}")
     
-    # Check Redis
+    # Try to check Redis (gracefully handle if not available)
     try:
+        import redis.asyncio as redis_client
         r = redis_client.from_url(settings.redis_url)
         await r.ping()
-        await r.close()
         health["redis"] = True
-    except Exception:
-        pass
-    
-    # Check workers (via Redis keys)
-    try:
-        r = redis_client.from_url(settings.redis_url)
-        worker_keys = await r.keys("celery-task-meta-*")
-        health["workers"] = len(worker_keys) > 0 or health["redis"]
-        health["worker_count"] = 1 if health["redis"] else 0  # Simplified
+        health["workers"] = True
+        health["worker_count"] = 1
         await r.close()
-    except Exception:
-        pass
+    except Exception as redis_error:
+        logger.debug(f"Redis not available: {redis_error}")
     
     return templates.TemplateResponse(
         "landing.html",
