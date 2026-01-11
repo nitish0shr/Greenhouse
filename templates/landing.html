@@ -1,0 +1,193 @@
+{% extends "base.html" %}
+
+{% block title %}Recruiter Autopilot - AI-Powered Recruiting{% endblock %}
+
+{% block content %}
+<div class="landing-hero">
+    <div class="hero-content">
+        <div class="hero-badge">
+            <span class="pulse"></span>
+            <span>Live & Processing</span>
+        </div>
+        <h1 class="hero-title">
+            <span class="gradient-text">Recruiter Autopilot</span>
+        </h1>
+        <p class="hero-subtitle">
+            AI-powered recruiting automation that screens, scores, and schedules candidates
+            while you focus on what matters most — building great teams.
+        </p>
+        <div class="hero-stats">
+            <div class="hero-stat">
+                <div class="stat-number" id="stat-processed">{{ stats.total_applications }}</div>
+                <div class="stat-label">Applications Processed</div>
+            </div>
+            <div class="hero-stat">
+                <div class="stat-number" id="stat-score">{{ stats.avg_processing_time }}</div>
+                <div class="stat-label">Avg Processing Time</div>
+            </div>
+            <div class="hero-stat">
+                <div class="stat-number" id="stat-active">{{ stats.active_jobs }}</div>
+                <div class="stat-label">Active Jobs</div>
+            </div>
+        </div>
+        <div class="hero-cta">
+            <a href="/admin" class="btn btn-glow btn-primary btn-large">
+                <span>Open Dashboard</span>
+                <svg class="btn-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M5 12h14M12 5l7 7-7 7" />
+                </svg>
+            </a>
+            <a href="/health" class="btn btn-outline btn-large">
+                System Health
+            </a>
+        </div>
+    </div>
+    <div class="hero-visual">
+        <div class="orbit-container">
+            <div class="orbit orbit-1">
+                <div class="orbit-dot" style="--delay: 0s;">
+                    <div class="icon-greenhouse">🌱</div>
+                </div>
+            </div>
+            <div class="orbit orbit-2">
+                <div class="orbit-dot" style="--delay: 2s;">
+                    <div class="icon-outlook">📧</div>
+                </div>
+            </div>
+            <div class="orbit orbit-3">
+                <div class="orbit-dot" style="--delay: 4s;">
+                    <div class="icon-calendar">📅</div>
+                </div>
+            </div>
+            <div class="center-icon">🤖</div>
+        </div>
+    </div>
+</div>
+
+<section class="features-section">
+    <h2 class="section-title">Powerful Automation Features</h2>
+    <div class="features-grid">
+        <div class="feature-card glass">
+            <div class="feature-icon">🎯</div>
+            <h3>Smart Scoring</h3>
+            <p>AI analyzes resumes against job requirements with configurable rubrics and hard constraints.</p>
+        </div>
+        <div class="feature-card glass">
+            <div class="feature-icon">⚡</div>
+            <h3>Instant Processing</h3>
+            <p>Webhook-driven architecture processes applications in seconds, not hours.</p>
+        </div>
+        <div class="feature-card glass">
+            <div class="feature-icon">📊</div>
+            <h3>Greenhouse Sync</h3>
+            <p>Full bidirectional sync with Greenhouse. Auto-advance, reject, or flag for review.</p>
+        </div>
+        <div class="feature-card glass">
+            <div class="feature-icon">📅</div>
+            <h3>Smart Scheduling</h3>
+            <p>Automatically propose interview slots based on interviewer availability.</p>
+        </div>
+        <div class="feature-card glass">
+            <div class="feature-icon">📧</div>
+            <h3>Email Integration</h3>
+            <p>Send and track emails via Microsoft Graph. Correlate replies automatically.</p>
+        </div>
+        <div class="feature-card glass">
+            <div class="feature-icon">🛡️</div>
+            <h3>Safety Controls</h3>
+            <p>Kill switches, audit trails, and human review queues for full control.</p>
+        </div>
+    </div>
+</section>
+
+<section class="status-section">
+    <h2 class="section-title">System Status</h2>
+    <div class="status-grid">
+        <div class="status-card glass">
+            <div class="status-header">
+                <span class="status-indicator {{ 'online' if health.api else 'offline' }}"></span>
+                <span>API Server</span>
+            </div>
+            <div class="status-detail">{{ 'Operational' if health.api else 'Degraded' }}</div>
+        </div>
+        <div class="status-card glass">
+            <div class="status-header">
+                <span class="status-indicator {{ 'online' if health.database else 'offline' }}"></span>
+                <span>Database</span>
+            </div>
+            <div class="status-detail">{{ 'Connected' if health.database else 'Disconnected' }}</div>
+        </div>
+        <div class="status-card glass">
+            <div class="status-header">
+                <span class="status-indicator {{ 'online' if health.redis else 'offline' }}"></span>
+                <span>Redis Queue</span>
+            </div>
+            <div class="status-detail">{{ 'Active' if health.redis else 'Disconnected' }}</div>
+        </div>
+        <div class="status-card glass">
+            <div class="status-header">
+                <span class="status-indicator {{ 'online' if health.workers else 'offline' }}"></span>
+                <span>Workers</span>
+            </div>
+            <div class="status-detail">{{ health.worker_count }} Active</div>
+        </div>
+    </div>
+</section>
+
+<section class="quick-actions">
+    <h2 class="section-title">Quick Actions</h2>
+    <div class="actions-grid">
+        <a href="/admin" class="action-card glass">
+            <div class="action-icon">📈</div>
+            <h3>Dashboard</h3>
+            <p>View stats and recent applications</p>
+        </a>
+        <a href="/admin/review" class="action-card glass">
+            <div class="action-icon">👁️</div>
+            <h3>Review Queue</h3>
+            <p>{{ stats.pending_reviews }} items pending</p>
+        </a>
+        <a href="/admin/queue" class="action-card glass">
+            <div class="action-icon">📋</div>
+            <h3>Job Queue</h3>
+            <p>Monitor webhook processing</p>
+        </a>
+        <a href="/docs" class="action-card glass">
+            <div class="action-icon">📖</div>
+            <h3>API Documentation</h3>
+            <p>Explore the REST API</p>
+        </a>
+    </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Animate stats counter
+    function animateCounter(el, target) {
+        const duration = 2000;
+        const start = 0;
+        const startTime = performance.now();
+
+        function update(currentTime) {
+            const elapsed = currentTime - startTime;
+            const progress = Math.min(elapsed / duration, 1);
+            const eased = 1 - Math.pow(1 - progress, 3); // Ease out cubic
+            const current = Math.floor(start + (target - start) * eased);
+            el.textContent = current.toLocaleString();
+            if (progress < 1) requestAnimationFrame(update);
+        }
+        requestAnimationFrame(update);
+    }
+
+    // Animate on load
+    document.addEventListener('DOMContentLoaded', function () {
+        const processed = document.getElementById('stat-processed');
+        if (processed) {
+            const target = parseInt(processed.textContent) || 0;
+            processed.textContent = '0';
+            setTimeout(() => animateCounter(processed, target), 500);
+        }
+    });
+</script>
+{% endblock %}

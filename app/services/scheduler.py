@@ -323,3 +323,186 @@ class Scheduler:
         self.db_session.commit()
         
         return mapping
+    
+    async def propose_slots(
+        self,
+        application_id: uuid.UUID,
+        candidate_email: str,
+        candidate_name: str,
+        job_title: str,
+        interviewer_emails: list[str],
+        duration_minutes: int = 60,
+        num_slots: int = 3,
+        days_out: int = 7,
+        working_hours_start: int = 9,
+        working_hours_end: int = 17,
+        timezone: str = "UTC",
+    ) -> dict:
+        """
+        Propose interview slots using Graph free/busy (availabilityView).
+        
+        Per First Review requirements:
+        - Find 3 available slots by checking interviewer calendars
+        - Send email to candidate with slot options
+        - Create tracking record for slot acceptance
+        
+        Args:
+            application_id: Application UUID
+            candidate_email: Candidate email
+            candidate_name: Candidate name
+            job_title: Job title
+            interviewer_emails: List of interviewer emails to check availability
+            duration_minutes: Interview duration
+            num_slots: Number of slots to propose (default 3)
+            days_out: Number of days to search for slots
+            working_hours_start: Start of working hours (0-23)
+            working_hours_end: End of working hours (0-23)
+            timezone: Timezone for display
+        
+        Returns:
+            Dict with proposed slots and email status
+        """
+        from app.config import settings
+        
+        # Get application
+        app_result = self.db_session.execute(
+            select(Application).where(Application.id == application_id)
+        )
+        application = app_result.scalar_one_or_none()
+        
+        if not application:
+            raise ValueError(f"Application not found: {application_id}")
+        
+        # Define search range
+        start_range = datetime.utcnow() + timedelta(days=1)  # Start tomorrow
+        end_range = start_range + timedelta(days=days_out)
+        
+        # Find available slots
+        try:
+            slots = await self.graph_client.find_free_slots(
+                interviewer_emails=interviewer_emails,
+                start_range=start_range,
+                end_range=end_range,
+                duration_minutes=duration_minutes,
+                num_slots=num_slots,
+                working_hours_start=working_hours_start,
+                working_hours_end=working_hours_end,
+            )
+        except GraphAPIError as e:
+            logger.error(f"Failed to get free/busy schedule: {e}")
+            raise
+        
+        if not slots:
+            logger.warning(f"No available slots found for application {application_id}")
+            return {
+                "status": "no_slots_available",
+                "application_id": str(application_id),
+                "slots": [],
+            }
+        
+        # Format slots for email
+        slot_options = []
+        for i, slot in enumerate(slots, 1):
+            start_dt = datetime.fromisoformat(slot["start"])
+            end_dt = datetime.fromisoformat(slot["end"])
+            
+            # Format nicely for email
+            date_str = start_dt.strftime("%A, %B %d, %Y")
+            time_str = f"{start_dt.strftime('%I:%M %p')} - {end_dt.strftime('%I:%M %p')} ({timezone})"
+            
+            slot_options.append({
+                "option": i,
+                "start": slot["start"],
+                "end": slot["end"],
+                "formatted": f"Option {i}: {date_str}, {time_str}",
+            })
+        
+        # Generate tracking token
+        tracking_token = f"[APP:{application.greenhouse_application_id}]"
+        
+        # Send proposal email to candidate
+        subject = f"Interview Scheduling - {job_title} {tracking_token}"
+        
+        body = f"""
+<html>
+<body>
+<p>Dear {candidate_name},</p>
+
+<p>Thank you for your interest in the {job_title} position. We would like to schedule an interview with you.</p>
+
+<p>Please reply to this email with your preferred time slot from the options below:</p>
+
+<ul>
+"""
+        for slot_opt in slot_options:
+            body += f"<li><strong>{slot_opt['formatted']}</strong></li>\n"
+        
+        body += f"""
+</ul>
+
+<p>The interview will be approximately {duration_minutes} minutes. A calendar invitation will be sent once you confirm your preferred time.</p>
+
+<p>If none of these times work for you, please let us know your availability and we will find an alternative.</p>
+
+<p>Best regards,<br>
+The Recruiting Team</p>
+
+<p style="color: #888; font-size: 10px;">Reference: {tracking_token}</p>
+</body>
+</html>
+"""
+        
+        try:
+            await self.graph_client.send_mail(
+                to=[candidate_email],
+                subject=subject,
+                body=body,
+                body_type="HTML",
+            )
+            email_sent = True
+            logger.info(f"Sent slot proposal email to {candidate_email}")
+        except GraphAPIError as e:
+            logger.error(f"Failed to send slot proposal email: {e}")
+            email_sent = False
+        
+        # Store proposed slots in mapping for later correlation
+        # When candidate replies, we can parse their selected slot
+        from app.models.message_mapping import MessageMapping
+        
+        mapping = MessageMapping(
+            application_id=application_id,
+            candidate_email=candidate_email.lower(),
+            tracking_token=tracking_token,
+        )
+        self.db_session.add(mapping)
+        self.db_session.commit()
+        
+        # Add note to Greenhouse about proposal
+        try:
+            note_body = f"""
+Interview Slots Proposed by Autopilot
+=====================================
+Duration: {duration_minutes} minutes
+Proposed Slots:
+"""
+            for slot_opt in slot_options:
+                note_body += f"  - {slot_opt['formatted']}\n"
+            
+            note_body += f"\nEmail sent to: {candidate_email}\nTracking: {tracking_token}"
+            
+            await self.greenhouse_client.add_note_to_candidate_with_action(
+                candidate_id=application.greenhouse_candidate_id,
+                note_body=note_body,
+                application_id=application_id,
+            )
+        except Exception as e:
+            logger.warning(f"Failed to add proposal note to Greenhouse: {e}")
+        
+        return {
+            "status": "proposed" if email_sent else "proposal_failed",
+            "application_id": str(application_id),
+            "slots": slot_options,
+            "email_sent": email_sent,
+            "tracking_token": tracking_token,
+        }
+

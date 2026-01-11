@@ -478,6 +478,144 @@ class GraphClient:
             f"/users/{mailbox}/events/{event_id}",
         )
     
+    async def get_free_busy_schedule(
+        self,
+        user_emails: list[str],
+        start_time: datetime,
+        end_time: datetime,
+        availability_view_interval: int = 30,  # minutes
+    ) -> dict:
+        """
+        Get free/busy availability for users.
+        
+        POST /users/{user}/calendar/getSchedule
+        
+        Per First Review requirements:
+        - Used for "Propose 3 slots" scheduling mode
+        - Returns availability view for determining open slots
+        
+        Args:
+            user_emails: List of user email addresses to check
+            start_time: Start of time range to check
+            end_time: End of time range to check
+            availability_view_interval: Interval in minutes for availability view
+        
+        Returns:
+            Dict with schedules for each user, including availabilityView
+        """
+        payload = {
+            "schedules": user_emails,
+            "startTime": {
+                "dateTime": start_time.isoformat(),
+                "timeZone": "UTC",
+            },
+            "endTime": {
+                "dateTime": end_time.isoformat(),
+                "timeZone": "UTC",
+            },
+            "availabilityViewInterval": availability_view_interval,
+        }
+        
+        logger.info(f"Getting free/busy schedule for {len(user_emails)} users")
+        
+        return await self._request(
+            "POST",
+            f"/users/{self.mailbox}/calendar/getSchedule",
+            json=payload,
+        )
+    
+    async def find_free_slots(
+        self,
+        interviewer_emails: list[str],
+        start_range: datetime,
+        end_range: datetime,
+        duration_minutes: int = 60,
+        num_slots: int = 3,
+        working_hours_start: int = 9,  # 9 AM
+        working_hours_end: int = 17,   # 5 PM
+    ) -> list[dict]:
+        """
+        Find available meeting slots for interviewers.
+        
+        Per First Review requirements:
+        - Find 3 available slots using Graph free/busy (availabilityView)
+        - Consider working hours
+        - All specified interviewers must be free
+        
+        Args:
+            interviewer_emails: Emails of required attendees
+            start_range: Start of search range
+            end_range: End of search range  
+            duration_minutes: Required slot duration
+            num_slots: Number of slots to find
+            working_hours_start: Start hour (0-23)
+            working_hours_end: End hour (0-23)
+        
+        Returns:
+            List of available slot dicts with start/end times
+        """
+        # Get free/busy data
+        schedule_data = await self.get_free_busy_schedule(
+            user_emails=interviewer_emails,
+            start_time=start_range,
+            end_time=end_range,
+            availability_view_interval=30,  # 30-minute granularity
+        )
+        
+        schedules = schedule_data.get("value", [])
+        
+        # Parse availability views
+        # availabilityView is a string where each character represents a slot:
+        # 0 = free, 1 = tentative, 2 = busy, 3 = out of office, 4 = working elsewhere
+        availability_views = []
+        for schedule in schedules:
+            view = schedule.get("availabilityView", "")
+            availability_views.append(view)
+        
+        if not availability_views:
+            return []
+        
+        # Find slots where all interviewers are free (value 0)
+        min_length = min(len(v) for v in availability_views) if availability_views else 0
+        
+        available_slots = []
+        current_time = start_range
+        interval_minutes = 30
+        slots_needed = duration_minutes // interval_minutes
+        
+        for i in range(min_length - slots_needed + 1):
+            # Check if all interviewers are free for the required duration
+            all_free = True
+            for view in availability_views:
+                for j in range(slots_needed):
+                    if i + j >= len(view) or view[i + j] != '0':
+                        all_free = False
+                        break
+                if not all_free:
+                    break
+            
+            if all_free:
+                slot_start = start_range + timedelta(minutes=i * interval_minutes)
+                slot_end = slot_start + timedelta(minutes=duration_minutes)
+                
+                # Check working hours
+                if (working_hours_start <= slot_start.hour < working_hours_end and
+                    working_hours_start <= slot_end.hour <= working_hours_end):
+                    
+                    # Skip weekends
+                    if slot_start.weekday() < 5:  # Monday = 0, Friday = 4
+                        available_slots.append({
+                            "start": slot_start.isoformat(),
+                            "end": slot_end.isoformat(),
+                            "timezone": "UTC",
+                        })
+                        
+                        if len(available_slots) >= num_slots:
+                            break
+        
+        logger.info(f"Found {len(available_slots)} available slots for interviewers")
+        return available_slots
+
     # -------------------------------------------------------------------------
     # Change Notifications (Webhooks)
     # -------------------------------------------------------------------------

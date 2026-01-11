@@ -4,96 +4,357 @@
 
 {% block content %}
 <div class="dashboard">
-    <h1>Dashboard</h1>
+    <header class="dashboard-header">
+        <div>
+            <h1>📊 Dashboard</h1>
+            <p class="header-subtitle">Real-time overview of your recruiting automation</p>
+        </div>
+        <div class="header-actions">
+            <button class="btn btn-secondary" onclick="location.reload()">
+                🔄 Refresh
+            </button>
+        </div>
+    </header>
 
     <div class="stats-grid">
-        <div class="stat-card">
-            <div class="stat-value">{{ stats.total_applications }}</div>
+        <div class="stat-card glass">
+            <div class="stat-icon">📋</div>
+            <div class="stat-value" data-animate="counter">{{ stats.total_applications }}</div>
             <div class="stat-label">Total Applications</div>
         </div>
-        <div class="stat-card pending">
+        <div class="stat-card glass pending">
+            <div class="stat-icon">⏳</div>
             <div class="stat-value">{{ stats.pending }}</div>
             <div class="stat-label">Pending</div>
         </div>
-        <div class="stat-card completed">
+        <div class="stat-card glass completed">
+            <div class="stat-icon">✅</div>
             <div class="stat-value">{{ stats.completed }}</div>
             <div class="stat-label">Completed</div>
         </div>
-        <div class="stat-card review">
+        <div class="stat-card glass review">
+            <div class="stat-icon">👁️</div>
             <div class="stat-value">{{ stats.review_queue }}</div>
             <div class="stat-label">
-                <a href="/admin/review">Review Queue</a>
+                <a href="/admin/review">Review Queue →</a>
             </div>
         </div>
     </div>
 
-    <div class="score-stats">
-        <h3>Score Statistics</h3>
-        <div class="score-grid">
-            <div class="score-item">
-                <span class="label">Average:</span>
-                <span class="value">{{ stats.avg_score }}</span>
+    <div class="dashboard-grid">
+        <div class="score-stats glass">
+            <h3>📈 Score Analytics</h3>
+            <div class="score-display">
+                <div class="score-circle">
+                    <svg viewBox="0 0 100 100">
+                        <circle cx="50" cy="50" r="45" stroke="rgba(255,255,255,0.1)" stroke-width="8" fill="none" />
+                        <circle cx="50" cy="50" r="45" stroke="url(#gradient)" stroke-width="8" fill="none"
+                            stroke-dasharray="{{ (stats.avg_score / 100) * 283 }} 283" stroke-linecap="round"
+                            transform="rotate(-90 50 50)" />
+                        <defs>
+                            <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                                <stop offset="0%" stop-color="#3b82f6" />
+                                <stop offset="100%" stop-color="#8b5cf6" />
+                            </linearGradient>
+                        </defs>
+                        <text x="50" y="55" text-anchor="middle" fill="white" font-size="18" font-weight="bold">
+                            {{ stats.avg_score }}
+                        </text>
+                    </svg>
+                    <span class="score-label">Avg Score</span>
+                </div>
+                <div class="score-details">
+                    <div class="score-item">
+                        <span class="label">Minimum</span>
+                        <span class="value low">{{ stats.min_score }}</span>
+                    </div>
+                    <div class="score-item">
+                        <span class="label">Maximum</span>
+                        <span class="value high">{{ stats.max_score }}</span>
+                    </div>
+                    <div class="score-item">
+                        <span class="label">Std Dev</span>
+                        <span class="value">{{ stats.std_dev or '-' }}</span>
+                    </div>
+                </div>
             </div>
-            <div class="score-item">
-                <span class="label">Min:</span>
-                <span class="value">{{ stats.min_score }}</span>
-            </div>
-            <div class="score-item">
-                <span class="label">Max:</span>
-                <span class="value">{{ stats.max_score }}</span>
+        </div>
+
+        <div class="quick-stats glass">
+            <h3>⚡ Quick Stats</h3>
+            <div class="quick-stats-grid">
+                <div class="quick-stat">
+                    <span class="number text-success">{{ stats.approved or 0 }}</span>
+                    <span class="label">Auto-Approved</span>
+                </div>
+                <div class="quick-stat">
+                    <span class="number text-danger">{{ stats.rejected or 0 }}</span>
+                    <span class="label">Auto-Rejected</span>
+                </div>
+                <div class="quick-stat">
+                    <span class="number text-warning">{{ stats.human_review or 0 }}</span>
+                    <span class="label">Human Review</span>
+                </div>
+                <div class="quick-stat">
+                    <span class="number text-info">{{ stats.processing or 0 }}</span>
+                    <span class="label">Processing</span>
+                </div>
             </div>
         </div>
     </div>
 
     <div class="recent-section">
-        <h2>Recent Applications</h2>
-        <table class="data-table">
-            <thead>
-                <tr>
-                    <th>GH ID</th>
-                    <th>Job</th>
-                    <th>Score</th>
-                    <th>Status</th>
-                    <th>Decision</th>
-                    <th>Created</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for app in recent_applications %}
-                <tr>
-                    <td>
-                        <a href="/admin/candidates/{{ app.candidate_id }}">
-                            {{ app.greenhouse_id }}
-                        </a>
-                    </td>
-                    <td>{{ app.job_name[:40] }}{% if app.job_name|length > 40 %}...{% endif %}</td>
-                    <td>
-                        {% if app.score is not none %}
-                        <span class="score-badge 
-                            {% if app.score >= 75 %}high
-                            {% elif app.score >= 50 %}medium
-                            {% else %}low{% endif %}">
-                            {{ app.score|round(1) }}
-                        </span>
-                        {% else %}
-                        -
-                        {% endif %}
-                    </td>
-                    <td>
-                        <span class="status-badge {{ app.processing_status }}">
-                            {{ app.processing_status }}
-                        </span>
-                    </td>
-                    <td>{{ app.auto_decision or '-' }}</td>
-                    <td>{{ app.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
-                </tr>
-                {% else %}
-                <tr>
-                    <td colspan="6" class="empty">No applications yet</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+        <h2>🕐 Recent Applications</h2>
+        <div class="table-container glass">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Greenhouse ID</th>
+                        <th>Job</th>
+                        <th>Score</th>
+                        <th>Status</th>
+                        <th>Decision</th>
+                        <th>Created</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for app in recent_applications %}
+                    <tr class="table-row-animate">
+                        <td>
+                            <a href="/admin/candidates/{{ app.candidate_id }}" class="app-link">
+                                #{{ app.greenhouse_application_id }}
+                            </a>
+                        </td>
+                        <td class="job-name">
+                            {{ app.job_name[:40] }}{% if app.job_name|length > 40 %}...{% endif %}
+                        </td>
+                        <td>
+                            {% if app.score is not none %}
+                            <span
+                                class="score-badge {% if app.score >= 75 %}high{% elif app.score >= 50 %}medium{% else %}low{% endif %}">
+                                {{ app.score|round(1) }}
+                            </span>
+                            {% else %}
+                            <span class="score-badge pending">-</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="status-badge {{ app.processing_status }}">
+                                {{ app.processing_status }}
+                            </span>
+                        </td>
+                        <td>
+                            {% if app.auto_decision %}
+                            <span class="suggestion-badge {{ app.auto_decision }}">
+                                {{ app.auto_decision }}
+                            </span>
+                            {% else %}
+                            -
+                            {% endif %}
+                        </td>
+                        <td class="timestamp">{{ app.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="6" class="empty">
+                            <div class="empty-state">
+                                <span class="empty-icon">📭</span>
+                                <p>No applications yet</p>
+                                <small>Applications will appear here when webhooks are received</small>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
     </div>
 </div>
+
+<style>
+    /* Dashboard specific styles */
+    .dashboard-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 2rem;
+    }
+
+    .header-subtitle {
+        color: var(--color-text-muted);
+        margin-top: 0.25rem;
+    }
+
+    .dashboard-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1.5rem;
+        margin-bottom: 2rem;
+    }
+
+    @media (max-width: 900px) {
+        .dashboard-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    .stat-card {
+        text-align: center;
+        padding: 1.5rem;
+        border-radius: 16px;
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    .stat-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+    }
+
+    .stat-icon {
+        font-size: 2rem;
+        margin-bottom: 0.5rem;
+    }
+
+    .score-display {
+        display: flex;
+        align-items: center;
+        gap: 2rem;
+    }
+
+    .score-circle {
+        position: relative;
+        width: 120px;
+        height: 120px;
+    }
+
+    .score-circle svg {
+        width: 100%;
+        height: 100%;
+    }
+
+    .score-circle .score-label {
+        position: absolute;
+        bottom: -1.5rem;
+        left: 50%;
+        transform: translateX(-50%);
+        font-size: 0.75rem;
+        color: var(--color-text-muted);
+    }
+
+    .score-details {
+        flex: 1;
+    }
+
+    .quick-stats-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 1rem;
+        margin-top: 1rem;
+    }
+
+    .quick-stat {
+        text-align: center;
+        padding: 1rem;
+        background: rgba(0, 0, 0, 0.2);
+        border-radius: 8px;
+    }
+
+    .quick-stat .number {
+        display: block;
+        font-size: 1.5rem;
+        font-weight: 700;
+    }
+
+    .quick-stat .label {
+        font-size: 0.75rem;
+        color: var(--color-text-muted);
+    }
+
+    .text-success {
+        color: #22c55e;
+    }
+
+    .text-danger {
+        color: #ef4444;
+    }
+
+    .text-warning {
+        color: #f59e0b;
+    }
+
+    .text-info {
+        color: #3b82f6;
+    }
+
+    .table-container {
+        border-radius: 16px;
+        overflow: hidden;
+    }
+
+    .app-link {
+        font-weight: 600;
+    }
+
+    .job-name {
+        max-width: 200px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .timestamp {
+        color: var(--color-text-muted);
+        font-size: 0.85rem;
+    }
+
+    .empty-state {
+        padding: 3rem;
+        text-align: center;
+    }
+
+    .empty-icon {
+        font-size: 3rem;
+        display: block;
+        margin-bottom: 1rem;
+    }
+
+    .table-row-animate {
+        animation: fadeIn 0.3s ease forwards;
+    }
+
+    @keyframes fadeIn {
+        from {
+            opacity: 0;
+            transform: translateY(10px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    .score-stats,
+    .quick-stats {
+        padding: 1.5rem;
+        border-radius: 16px;
+    }
+
+    .score-stats h3,
+    .quick-stats h3 {
+        margin-bottom: 1.5rem;
+        color: var(--color-text-muted);
+        font-size: 0.9rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+
+    .score-item .value.high {
+        color: #22c55e;
+    }
+
+    .score-item .value.low {
+        color: #ef4444;
+    }
+</style>
 {% endblock %}

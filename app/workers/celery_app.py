@@ -62,6 +62,19 @@ celery_app.conf.update(
             "task": "app.workers.renewal_tasks.renew_graph_subscriptions",
             "schedule": 3600.0,  # Hourly (checks for subscriptions expiring in next 24h)
         },
+        # Pipeline Nudge Tasks
+        "nudge-no-reply-candidates": {
+            "task": "app.workers.tasks.nudge_no_reply_candidates",
+            "schedule": 86400.0,  # Daily (check for candidates with no reply after 3 days)
+        },
+        "chase-missing-scorecards": {
+            "task": "app.workers.tasks.chase_missing_scorecards",
+            "schedule": 43200.0,  # Every 12 hours (check for missing scorecards after 24h)
+        },
+        "check-stuck-in-stage": {
+            "task": "app.workers.tasks.check_stuck_in_stage",
+            "schedule": 86400.0,  # Daily (check for SLA breaches at 5 days)
+        },
     },
 )
 

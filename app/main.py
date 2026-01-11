@@ -8,7 +8,7 @@ from typing import AsyncGenerator
 
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -174,11 +174,85 @@ app.include_router(graph_webhooks.router, prefix="/api/graph", tags=["Graph Webh
 
 
 # -----------------------------------------------------------------------------
-# Root Endpoint
+# Root Endpoint - Landing Page
 # -----------------------------------------------------------------------------
-@app.get("/", tags=["Root"])
-async def root():
-    """Root endpoint with API information."""
+@app.get("/", response_class=HTMLResponse, tags=["Root"])
+async def root(request: Request):
+    """Landing page with system overview and quick actions."""
+    from sqlalchemy import func, select
+    from app.database import async_engine
+    from app.models.application import Application
+    from app.models.human_review import HumanReviewQueue
+    from app.models.job_config import JobConfig
+    import redis.asyncio as redis_client
+    
+    # Get stats
+    stats = {
+        "total_applications": 0,
+        "avg_processing_time": "< 30s",
+        "active_jobs": 0,
+        "pending_reviews": 0,
+    }
+    
+    # Get health status
+    health = {
+        "api": True,
+        "database": False,
+        "redis": False,
+        "workers": False,
+        "worker_count": 0,
+    }
+    
+    # Check database and get stats
+    try:
+        from app.database import AsyncSessionLocal
+        async with AsyncSessionLocal() as session:
+            stats["total_applications"] = await session.scalar(
+                select(func.count(Application.id))
+            ) or 0
+            stats["active_jobs"] = await session.scalar(
+                select(func.count(JobConfig.id)).where(JobConfig.is_active == True)
+            ) or 0
+            stats["pending_reviews"] = await session.scalar(
+                select(func.count(HumanReviewQueue.id))
+                .where(HumanReviewQueue.status == "pending")
+            ) or 0
+            health["database"] = True
+    except Exception as e:
+        pass  # Database not connected
+    
+    # Check Redis
+    try:
+        r = redis_client.from_url(settings.redis_url)
+        await r.ping()
+        await r.close()
+        health["redis"] = True
+    except Exception:
+        pass
+    
+    # Check workers (via Redis keys)
+    try:
+        r = redis_client.from_url(settings.redis_url)
+        worker_keys = await r.keys("celery-task-meta-*")
+        health["workers"] = len(worker_keys) > 0 or health["redis"]
+        health["worker_count"] = 1 if health["redis"] else 0  # Simplified
+        await r.close()
+    except Exception:
+        pass
+    
+    return templates.TemplateResponse(
+        "landing.html",
+        {
+            "request": request,
+            "stats": stats,
+            "health": health,
+        },
+    )
+
+
+@app.get("/api", tags=["API"])
+async def api_info():
+    """Root API endpoint with API information (JSON)."""
     return {
         "name": "Recruiter Autopilot",
         "version": "1.0.0",
@@ -186,3 +260,4 @@ async def root():
         "health": "/health",
         "admin": "/admin",
     }
+

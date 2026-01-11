@@ -1,148 +1,354 @@
 {% extends "base.html" %}
 
-{% block title %}Human Review Queue - Recruiter Autopilot{% endblock %}
+{% block title %}Review Queue - Recruiter Autopilot{% endblock %}
 
 {% block content %}
 <div class="review-page">
-    <h1>Human Review Queue</h1>
+    <header class="page-header">
+        <div>
+            <h1>👁️ Human Review Queue</h1>
+            <p class="header-subtitle">Applications requiring manual review</p>
+        </div>
+        <div class="header-stats">
+            <span class="stat-pill pending">{{ items|length }} Pending</span>
+        </div>
+    </header>
 
-    <div class="filters">
-        <form method="get" class="filter-form">
-            <label>
-                Status:
-                <select name="status" onchange="this.form.submit()">
-                    <option value="pending" {% if current_status=='pending' %}selected{% endif %}>Pending</option>
-                    <option value="approved" {% if current_status=='approved' %}selected{% endif %}>Approved</option>
-                    <option value="rejected" {% if current_status=='rejected' %}selected{% endif %}>Rejected</option>
-                    <option value="" {% if not current_status %}selected{% endif %}>All</option>
-                </select>
-            </label>
-            <label>
-                Job:
-                <select name="job_id" onchange="this.form.submit()">
-                    <option value="">All Jobs</option>
-                    {% for job in jobs %}
-                    <option value="{{ job.job_id }}" {% if current_job_id==job.job_id %}selected{% endif %}>
-                        {{ job.job_name[:50] }}
-                    </option>
-                    {% endfor %}
-                </select>
-            </label>
-        </form>
-    </div>
+    <form class="filter-form glass" method="GET">
+        <label>
+            Status:
+            <select name="status" onchange="this.form.submit()">
+                <option value="pending" {% if current_status=='pending' %}selected{% endif %}>Pending</option>
+                <option value="approved" {% if current_status=='approved' %}selected{% endif %}>Approved</option>
+                <option value="rejected" {% if current_status=='rejected' %}selected{% endif %}>Rejected</option>
+                <option value="" {% if not current_status %}selected{% endif %}>All</option>
+            </select>
+        </label>
+        <label>
+            Job:
+            <select name="job_id" onchange="this.form.submit()">
+                <option value="">All Jobs</option>
+                {% for job_id, job_name in jobs %}
+                <option value="{{ job_id }}" {% if current_job_id==job_id %}selected{% endif %}>
+                    {{ job_name }}
+                </option>
+                {% endfor %}
+            </select>
+        </label>
+    </form>
 
-    <table class="data-table">
-        <thead>
-            <tr>
-                <th>Application</th>
-                <th>Job</th>
-                <th>Score</th>
-                <th>Confidence</th>
-                <th>Suggested</th>
-                <th>Reasons</th>
-                <th>Actions</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for item in items %}
-            <tr>
-                <td>
-                    <a href="/admin/candidates/{{ item.application_id }}" target="_blank">
-                        {{ item.greenhouse_application_id }}
-                    </a>
-                </td>
-                <td>{{ item.job_name[:30] }}{% if item.job_name|length > 30 %}...{% endif %}</td>
-                <td>
-                    {% if item.auto_score is not none %}
-                    <span class="score-badge 
-                        {% if item.auto_score >= 75 %}high
-                        {% elif item.auto_score >= 50 %}medium
-                        {% else %}low{% endif %}">
-                        {{ item.auto_score|round(1) }}
-                    </span>
-                    {% else %}
-                    -
-                    {% endif %}
-                </td>
-                <td>{{ (item.confidence_score * 100)|round(0) if item.confidence_score else '-' }}%</td>
-                <td>
-                    <span class="suggestion-badge {{ item.suggested_action or 'unknown' }}">
-                        {{ item.suggested_action or '-' }}
-                    </span>
-                </td>
-                <td class="reasons-cell">
-                    <ul class="reason-list">
-                        {% for reason in item.review_reasons[:3] %}
-                        <li>{{ reason[:50] }}{% if reason|length > 50 %}...{% endif %}</li>
+    <div class="review-list">
+        {% for item in items %}
+        <div class="review-card glass" data-id="{{ item.id }}">
+            <div class="review-header">
+                <div class="review-info">
+                    <span class="review-id">#{{ item.greenhouse_application_id }}</span>
+                    <span class="review-job">{{ item.job_name }}</span>
+                </div>
+                <div class="review-scores">
+                    <div class="score-pill">
+                        <span class="label">Score</span>
+                        <span
+                            class="value {% if item.auto_score >= 70 %}high{% elif item.auto_score >= 40 %}medium{% else %}low{% endif %}">
+                            {{ item.auto_score|round(1) }}
+                        </span>
+                    </div>
+                    <div class="score-pill">
+                        <span class="label">Confidence</span>
+                        <span class="value">{{ (item.confidence_score * 100)|round(0) }}%</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="review-body">
+                <div class="review-reasons">
+                    <h4>Review Reasons</h4>
+                    <ul>
+                        {% for reason in item.review_reasons %}
+                        <li>{{ reason }}</li>
+                        {% else %}
+                        <li class="muted">No specific reason provided</li>
                         {% endfor %}
                     </ul>
-                </td>
-                <td class="actions-cell">
-                    {% if item.status == 'pending' %}
-                    <button class="btn btn-approve" onclick="approveItem('{{ item.id }}')">
-                        ✓ Approve
-                    </button>
-                    <button class="btn btn-reject" onclick="rejectItem('{{ item.id }}')">
-                        ✗ Reject
-                    </button>
-                    {% else %}
-                    <span class="status-badge {{ item.status }}">
-                        {{ item.status }}
-                    </span>
-                    {% if item.reviewed_by %}
-                    <small>by {{ item.reviewed_by }}</small>
-                    {% endif %}
-                    {% endif %}
-                </td>
-            </tr>
-            {% else %}
-            <tr>
-                <td colspan="7" class="empty">No items in queue</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-</div>
-{% endblock %}
+                </div>
 
-{% block scripts %}
+                <div class="review-suggestion">
+                    <span class="label">AI Suggestion:</span>
+                    <span class="suggestion-badge {{ item.suggested_action }}">
+                        {{ item.suggested_action|upper }}
+                    </span>
+                </div>
+            </div>
+
+            <div class="review-actions">
+                <button class="btn btn-approve" onclick="approveReview('{{ item.id }}')">
+                    ✓ Approve & Advance
+                </button>
+                <button class="btn btn-reject" onclick="rejectReview('{{ item.id }}')">
+                    ✗ Reject
+                </button>
+                <a href="/admin/candidates/{{ item.application_id }}" class="btn btn-secondary">
+                    View Details →
+                </a>
+            </div>
+        </div>
+        {% else %}
+        <div class="empty-state glass">
+            <span class="empty-icon">✨</span>
+            <h3>All caught up!</h3>
+            <p>No applications require review at the moment.</p>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<style>
+    .review-page {
+        max-width: 900px;
+        margin: 0 auto;
+    }
+
+    .page-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 2rem;
+    }
+
+    .header-subtitle {
+        color: var(--color-text-muted);
+        margin-top: 0.25rem;
+    }
+
+    .stat-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.5rem 1rem;
+        border-radius: 100px;
+        font-size: 0.875rem;
+        font-weight: 600;
+    }
+
+    .stat-pill.pending {
+        background: rgba(249, 158, 11, 0.2);
+        color: #fbbf24;
+        border: 1px solid rgba(249, 158, 11, 0.3);
+    }
+
+    .filter-form {
+        display: flex;
+        gap: 1.5rem;
+        padding: 1rem 1.5rem;
+        border-radius: 12px;
+        margin-bottom: 2rem;
+    }
+
+    .filter-form label {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        font-size: 0.875rem;
+        color: var(--color-text-muted);
+    }
+
+    .filter-form select {
+        padding: 0.5rem 1rem;
+        border: 1px solid var(--color-border);
+        border-radius: 8px;
+        background: var(--color-bg-card);
+        color: var(--color-text);
+        font-size: 0.875rem;
+        cursor: pointer;
+    }
+
+    .review-list {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+    }
+
+    .review-card {
+        padding: 1.5rem;
+        border-radius: 16px;
+        transition: all 0.3s ease;
+    }
+
+    .review-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+    }
+
+    .review-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1rem;
+        padding-bottom: 1rem;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .review-id {
+        font-weight: 700;
+        font-size: 1.125rem;
+        color: var(--color-primary);
+    }
+
+    .review-job {
+        color: var(--color-text-muted);
+        margin-left: 1rem;
+    }
+
+    .review-scores {
+        display: flex;
+        gap: 1rem;
+    }
+
+    .score-pill {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 0.5rem 1rem;
+        background: rgba(0, 0, 0, 0.2);
+        border-radius: 8px;
+    }
+
+    .score-pill .label {
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--color-text-muted);
+    }
+
+    .score-pill .value {
+        font-size: 1.25rem;
+        font-weight: 700;
+    }
+
+    .score-pill .value.high {
+        color: #22c55e;
+    }
+
+    .score-pill .value.medium {
+        color: #f59e0b;
+    }
+
+    .score-pill .value.low {
+        color: #ef4444;
+    }
+
+    .review-body {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 1.5rem;
+    }
+
+    .review-reasons h4 {
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--color-text-muted);
+        margin-bottom: 0.5rem;
+    }
+
+    .review-reasons ul {
+        list-style: none;
+        padding: 0;
+    }
+
+    .review-reasons li {
+        padding: 0.25rem 0;
+        font-size: 0.875rem;
+    }
+
+    .review-reasons li.muted {
+        color: var(--color-text-muted);
+        font-style: italic;
+    }
+
+    .review-suggestion {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 0.25rem;
+    }
+
+    .review-suggestion .label {
+        font-size: 0.75rem;
+        color: var(--color-text-muted);
+    }
+
+    .review-actions {
+        display: flex;
+        gap: 0.75rem;
+    }
+
+    .empty-state {
+        text-align: center;
+        padding: 4rem 2rem;
+        border-radius: 16px;
+    }
+
+    .empty-state .empty-icon {
+        font-size: 4rem;
+        margin-bottom: 1rem;
+        display: block;
+    }
+
+    .empty-state h3 {
+        margin-bottom: 0.5rem;
+    }
+
+    .empty-state p {
+        color: var(--color-text-muted);
+    }
+</style>
+
 <script>
-    async function approveItem(reviewId) {
-        if (!confirm('Are you sure you want to APPROVE this application?')) return;
+    async function approveReview(reviewId) {
+        if (!confirm('Approve this application and advance in Greenhouse?')) return;
 
         try {
             const response = await fetch(`/admin/api/review/${reviewId}/approve`, {
                 method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
             });
 
             if (response.ok) {
-                location.reload();
+                const card = document.querySelector(`[data-id="${reviewId}"]`);
+                card.style.opacity = '0.5';
+                card.style.pointerEvents = 'none';
+                setTimeout(() => location.reload(), 500);
             } else {
-                const error = await response.json();
-                alert('Error: ' + (error.detail || 'Failed to approve'));
+                alert('Failed to approve. Please try again.');
             }
         } catch (e) {
-            alert('Error: ' + e.message);
+            alert('Network error. Please try again.');
         }
     }
 
-    async function rejectItem(reviewId) {
-        const notes = prompt('Enter rejection notes (optional):');
-        if (notes === null) return; // User cancelled
+    async function rejectReview(reviewId) {
+        const notes = prompt('Enter rejection reason (optional):');
+        if (notes === null) return; // Cancelled
 
         try {
-            const response = await fetch(`/admin/api/review/${reviewId}/reject?notes=${encodeURIComponent(notes)}`, {
+            const response = await fetch(`/admin/api/review/${reviewId}/reject`, {
                 method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ notes })
             });
 
             if (response.ok) {
-                location.reload();
+                const card = document.querySelector(`[data-id="${reviewId}"]`);
+                card.style.opacity = '0.5';
+                card.style.pointerEvents = 'none';
+                setTimeout(() => location.reload(), 500);
             } else {
-                const error = await response.json();
-                alert('Error: ' + (error.detail || 'Failed to reject'));
+                alert('Failed to reject. Please try again.');
             }
         } catch (e) {
-            alert('Error: ' + e.message);
+            alert('Network error. Please try again.');
         }
     }
 </script>

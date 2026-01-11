@@ -95,24 +95,39 @@ async def handle_email_notification(
     """
     Handle email-related notifications (new replies, etc.)
     
-    This can be used to:
+    Per First Review requirements:
     - Track candidate replies to automated emails
-    - Update Greenhouse activity feed with reply content
+    - Correlate replies to applications via conversationId or tracking_token
+    - Log reply to Greenhouse activity feed
+    - Create exception if correlation fails
     """
+    from app.workers.tasks import process_email_reply
+    
     resource = notification.get("resource", "")
     change_type = notification.get("changeType", "")
     resource_data = notification.get("resourceData", {})
     
     message_id = resource_data.get("id")
     
-    if change_type == "created":
-        logger.info(f"New email received: {message_id}")
-        # TODO: Fetch message content and process
-        # - Check if it's a reply to a candidate email
-        # - Log to Greenhouse activity feed if relevant
+    if change_type == "created" and message_id:
+        logger.info(f"New email received, enqueuing for processing: {message_id}")
+        
+        # Enqueue to Celery worker for processing
+        # This keeps the webhook handler fast and idempotent
+        try:
+            process_email_reply.delay(
+                message_id=message_id,
+                resource=resource,
+            )
+        except Exception as e:
+            logger.error(f"Failed to enqueue email processing: {e}", exc_info=True)
+            # Don't fail the webhook - we received the notification
     
     elif change_type == "updated":
         logger.info(f"Email updated: {message_id}")
+        # Updates are typically read receipts or flag changes - no action needed
+
+
 
 
 async def handle_calendar_notification(
