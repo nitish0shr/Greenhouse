@@ -30,14 +30,7 @@ class Settings(BaseSettings):
     # API Server
     # -------------------------------------------------------------------------
     api_host: str = "0.0.0.0"
-    api_port: int = Field(default=8000)
-    
-    @field_validator("api_port", mode="before")
-    @classmethod
-    def parse_port(cls, v):
-        """Parse PORT from environment (Railway, Heroku, etc.)."""
-        import os
-        return int(os.getenv("PORT", v))
+    api_port: int = 8000
     
     # -------------------------------------------------------------------------
     # Database
