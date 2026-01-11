@@ -89,8 +89,8 @@ class Settings(BaseSettings):
     # -------------------------------------------------------------------------
     # Admin UI
     # -------------------------------------------------------------------------
-    admin_username: str = "admin"
-    admin_password: str = "change_this_password"
+    admin_username: str = "Nitish"
+    admin_password: str = "Nitish"
     
     # -------------------------------------------------------------------------
     # Logging
