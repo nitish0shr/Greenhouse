@@ -1,0 +1,140 @@
+{% extends "base.html" %}
+
+{% block title %}{{ candidate.full_name }} - Recruiter Autopilot{% endblock %}
+
+{% block content %}
+<div class="candidate-page">
+    <div class="candidate-header">
+        <h1>{{ candidate.full_name }}</h1>
+        <div class="candidate-meta">
+            <span>GH ID: {{ candidate.greenhouse_id }}</span>
+            {% if candidate.email %}
+            <span>{{ candidate.email }}</span>
+            {% endif %}
+        </div>
+        <div class="candidate-actions">
+            <button class="btn btn-primary" onclick="rescoreCandidate()">
+                🔄 Re-score
+            </button>
+            <a href="https://app.greenhouse.io/people/{{ candidate.greenhouse_id }}" target="_blank"
+                class="btn btn-secondary">
+                View in Greenhouse →
+            </a>
+        </div>
+    </div>
+
+    <div class="content-grid">
+        <section class="applications-section">
+            <h2>Applications</h2>
+            {% for app in applications %}
+            <div class="application-card">
+                <div class="app-header">
+                    <strong>{{ app.job_name }}</strong>
+                    <span class="status-badge {{ app.processing_status }}">
+                        {{ app.processing_status }}
+                    </span>
+                </div>
+                <div class="app-details">
+                    <div class="detail-row">
+                        <span class="label">Stage:</span>
+                        <span>{{ app.current_stage_name or 'N/A' }}</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="label">Score:</span>
+                        {% if app.score is not none %}
+                        <span class="score-badge 
+                            {% if app.score >= 75 %}high
+                            {% elif app.score >= 50 %}medium
+                            {% else %}low{% endif %}">
+                            {{ app.score|round(1) }}
+                        </span>
+                        {% else %}
+                        <span>Not scored</span>
+                        {% endif %}
+                    </div>
+                    <div class="detail-row">
+                        <span class="label">Confidence:</span>
+                        <span>{{ (app.confidence_score * 100)|round(0) if app.confidence_score else '-' }}%</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="label">Decision:</span>
+                        <span>{{ app.auto_decision or 'Pending' }}</span>
+                    </div>
+                </div>
+
+                {% if app.score_breakdown %}
+                <div class="score-breakdown">
+                    <h4>Score Breakdown</h4>
+                    <div class="breakdown-grid">
+                        {% for skill, points in app.score_breakdown.items() %}
+                        <div class="breakdown-item">
+                            <span class="skill-name">{{ skill }}</span>
+                            <span class="skill-points">{{ points }}</span>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+
+                {% if app.hard_reject_reasons %}
+                <div class="reject-reasons">
+                    <h4>Hard Reject Reasons</h4>
+                    <ul>
+                        {% for reason in app.hard_reject_reasons %}
+                        <li>{{ reason }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                {% endif %}
+            </div>
+            {% else %}
+            <p class="empty">No applications</p>
+            {% endfor %}
+        </section>
+
+        <section class="audit-section">
+            <h2>Audit Log</h2>
+            <div class="audit-timeline">
+                {% for log in audit_logs %}
+                <div class="audit-item {{ log.status }}">
+                    <div class="audit-time">
+                        {{ log.created_at.strftime('%Y-%m-%d %H:%M:%S') }}
+                    </div>
+                    <div class="audit-content">
+                        <span class="audit-type">{{ log.action_type }}</span>
+                        <p>{{ log.description }}</p>
+                        <small>by {{ log.triggered_by }}</small>
+                    </div>
+                </div>
+                {% else %}
+                <p class="empty">No audit log entries</p>
+                {% endfor %}
+            </div>
+        </section>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    async function rescoreCandidate() {
+        if (!confirm('Re-run scoring for this candidate?')) return;
+
+        try {
+            const response = await fetch(`/admin/api/candidates/{{ candidate.id }}/rescore`, {
+                method: 'POST',
+            });
+
+            if (response.ok) {
+                alert('Candidate queued for re-scoring');
+                location.reload();
+            } else {
+                const error = await response.json();
+                alert('Error: ' + (error.detail || 'Failed to queue'));
+            }
+        } catch (e) {
+            alert('Error: ' + e.message);
+        }
+    }
+</script>
+{% endblock %}

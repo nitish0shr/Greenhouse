@@ -1,0 +1,180 @@
+# =============================================================================
+# Recruiter Autopilot - Docker Compose Configuration
+# =============================================================================
+# Usage:
+#   Development: docker-compose up -d
+#   Production:  docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+
+version: '3.8'
+
+services:
+  # ---------------------------------------------------------------------------
+  # FastAPI Application
+  # ---------------------------------------------------------------------------
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: recruiter-autopilot-app
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://recruiter:recruiter_pass@postgres:5432/recruiter_autopilot
+      - DATABASE_URL_SYNC=postgresql://recruiter:recruiter_pass@postgres:5432/recruiter_autopilot
+      - REDIS_URL=redis://redis:6379/0
+    env_file:
+      - .env
+    volumes:
+      - ./app:/app/app:ro
+      - ./config:/app/config:ro
+      - ./templates:/app/templates:ro
+      - ./static:/app/static:ro
+      - ./alembic:/app/alembic:ro
+      - app_logs:/app/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8000/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - recruiter-net
+
+  # ---------------------------------------------------------------------------
+  # Celery Worker
+  # ---------------------------------------------------------------------------
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: recruiter-autopilot-worker
+    restart: unless-stopped
+    command: celery -A app.workers.celery_app worker --loglevel=info --concurrency=4
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://recruiter:recruiter_pass@postgres:5432/recruiter_autopilot
+      - DATABASE_URL_SYNC=postgresql://recruiter:recruiter_pass@postgres:5432/recruiter_autopilot
+      - REDIS_URL=redis://redis:6379/0
+    env_file:
+      - .env
+    volumes:
+      - ./app:/app/app:ro
+      - ./config:/app/config:ro
+      - worker_logs:/app/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - recruiter-net
+
+  # ---------------------------------------------------------------------------
+  # Celery Beat (Scheduler)
+  # ---------------------------------------------------------------------------
+  beat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: recruiter-autopilot-beat
+    restart: unless-stopped
+    command: celery -A app.workers.celery_app beat --loglevel=info
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://recruiter:recruiter_pass@postgres:5432/recruiter_autopilot
+      - DATABASE_URL_SYNC=postgresql://recruiter:recruiter_pass@postgres:5432/recruiter_autopilot
+      - REDIS_URL=redis://redis:6379/0
+    env_file:
+      - .env
+    volumes:
+      - ./app:/app/app:ro
+      - ./config:/app/config:ro
+    depends_on:
+      - worker
+    networks:
+      - recruiter-net
+
+  # ---------------------------------------------------------------------------
+  # Flower (Celery Monitoring)
+  # ---------------------------------------------------------------------------
+  flower:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: recruiter-autopilot-flower
+    restart: unless-stopped
+    command: celery -A app.workers.celery_app flower --port=5555
+    ports:
+      - "5555:5555"
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+    env_file:
+      - .env
+    depends_on:
+      - worker
+    networks:
+      - recruiter-net
+
+  # ---------------------------------------------------------------------------
+  # PostgreSQL Database
+  # ---------------------------------------------------------------------------
+  postgres:
+    image: postgres:15-alpine
+    container_name: recruiter-autopilot-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: recruiter
+      POSTGRES_PASSWORD: recruiter_pass
+      POSTGRES_DB: recruiter_autopilot
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U recruiter -d recruiter_autopilot" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - recruiter-net
+
+  # ---------------------------------------------------------------------------
+  # Redis (Celery Broker & Cache)
+  # ---------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: recruiter-autopilot-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - recruiter-net
+
+# -----------------------------------------------------------------------------
+# Networks
+# -----------------------------------------------------------------------------
+networks:
+  recruiter-net:
+    driver: bridge
+
+# -----------------------------------------------------------------------------
+# Volumes
+# -----------------------------------------------------------------------------
+volumes:
+  postgres_data:
+  redis_data:
+  app_logs:
+  worker_logs:

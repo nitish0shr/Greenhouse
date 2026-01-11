@@ -1,0 +1,149 @@
+{% extends "base.html" %}
+
+{% block title %}Human Review Queue - Recruiter Autopilot{% endblock %}
+
+{% block content %}
+<div class="review-page">
+    <h1>Human Review Queue</h1>
+
+    <div class="filters">
+        <form method="get" class="filter-form">
+            <label>
+                Status:
+                <select name="status" onchange="this.form.submit()">
+                    <option value="pending" {% if current_status=='pending' %}selected{% endif %}>Pending</option>
+                    <option value="approved" {% if current_status=='approved' %}selected{% endif %}>Approved</option>
+                    <option value="rejected" {% if current_status=='rejected' %}selected{% endif %}>Rejected</option>
+                    <option value="" {% if not current_status %}selected{% endif %}>All</option>
+                </select>
+            </label>
+            <label>
+                Job:
+                <select name="job_id" onchange="this.form.submit()">
+                    <option value="">All Jobs</option>
+                    {% for job in jobs %}
+                    <option value="{{ job.job_id }}" {% if current_job_id==job.job_id %}selected{% endif %}>
+                        {{ job.job_name[:50] }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </label>
+        </form>
+    </div>
+
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Application</th>
+                <th>Job</th>
+                <th>Score</th>
+                <th>Confidence</th>
+                <th>Suggested</th>
+                <th>Reasons</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in items %}
+            <tr>
+                <td>
+                    <a href="/admin/candidates/{{ item.application_id }}" target="_blank">
+                        {{ item.greenhouse_application_id }}
+                    </a>
+                </td>
+                <td>{{ item.job_name[:30] }}{% if item.job_name|length > 30 %}...{% endif %}</td>
+                <td>
+                    {% if item.auto_score is not none %}
+                    <span class="score-badge 
+                        {% if item.auto_score >= 75 %}high
+                        {% elif item.auto_score >= 50 %}medium
+                        {% else %}low{% endif %}">
+                        {{ item.auto_score|round(1) }}
+                    </span>
+                    {% else %}
+                    -
+                    {% endif %}
+                </td>
+                <td>{{ (item.confidence_score * 100)|round(0) if item.confidence_score else '-' }}%</td>
+                <td>
+                    <span class="suggestion-badge {{ item.suggested_action or 'unknown' }}">
+                        {{ item.suggested_action or '-' }}
+                    </span>
+                </td>
+                <td class="reasons-cell">
+                    <ul class="reason-list">
+                        {% for reason in item.review_reasons[:3] %}
+                        <li>{{ reason[:50] }}{% if reason|length > 50 %}...{% endif %}</li>
+                        {% endfor %}
+                    </ul>
+                </td>
+                <td class="actions-cell">
+                    {% if item.status == 'pending' %}
+                    <button class="btn btn-approve" onclick="approveItem('{{ item.id }}')">
+                        ✓ Approve
+                    </button>
+                    <button class="btn btn-reject" onclick="rejectItem('{{ item.id }}')">
+                        ✗ Reject
+                    </button>
+                    {% else %}
+                    <span class="status-badge {{ item.status }}">
+                        {{ item.status }}
+                    </span>
+                    {% if item.reviewed_by %}
+                    <small>by {{ item.reviewed_by }}</small>
+                    {% endif %}
+                    {% endif %}
+                </td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="7" class="empty">No items in queue</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    async function approveItem(reviewId) {
+        if (!confirm('Are you sure you want to APPROVE this application?')) return;
+
+        try {
+            const response = await fetch(`/admin/api/review/${reviewId}/approve`, {
+                method: 'POST',
+            });
+
+            if (response.ok) {
+                location.reload();
+            } else {
+                const error = await response.json();
+                alert('Error: ' + (error.detail || 'Failed to approve'));
+            }
+        } catch (e) {
+            alert('Error: ' + e.message);
+        }
+    }
+
+    async function rejectItem(reviewId) {
+        const notes = prompt('Enter rejection notes (optional):');
+        if (notes === null) return; // User cancelled
+
+        try {
+            const response = await fetch(`/admin/api/review/${reviewId}/reject?notes=${encodeURIComponent(notes)}`, {
+                method: 'POST',
+            });
+
+            if (response.ok) {
+                location.reload();
+            } else {
+                const error = await response.json();
+                alert('Error: ' + (error.detail || 'Failed to reject'));
+            }
+        } catch (e) {
+            alert('Error: ' + e.message);
+        }
+    }
+</script>
+{% endblock %}

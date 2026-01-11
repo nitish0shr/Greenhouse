@@ -1,0 +1,161 @@
+# =============================================================================
+# Example Scoring Rubric Configuration
+# =============================================================================
+# This file defines how candidates are scored.
+# Customize this for each job or role.
+#
+# IMPORTANT COMPLIANCE NOTE:
+# - Never use protected traits (race, gender, age, religion, etc.)
+# - Focus on job-relevant skills and qualifications only
+
+# =============================================================================
+# Required Skills
+# =============================================================================
+# These are must-have skills. Each skill has:
+# - name: Display name
+# - weight: Points awarded if skill is found (0-100)
+# - keywords: Terms that indicate this skill (case-insensitive)
+
+required_skills:
+  - name: "Python"
+    weight: 20
+    keywords:
+      - "python"
+      - "django"
+      - "fastapi"
+      - "flask"
+      - "pandas"
+      - "numpy"
+  
+  - name: "SQL & Databases"
+    weight: 15
+    keywords:
+      - "sql"
+      - "postgres"
+      - "postgresql"
+      - "mysql"
+      - "database"
+      - "mongodb"
+      - "redis"
+  
+  - name: "API Development"
+    weight: 15
+    keywords:
+      - "rest api"
+      - "restful"
+      - "graphql"
+      - "api development"
+      - "microservices"
+  
+  - name: "Cloud Platforms"
+    weight: 10
+    keywords:
+      - "aws"
+      - "azure"
+      - "gcp"
+      - "google cloud"
+      - "cloud"
+      - "kubernetes"
+      - "docker"
+
+# =============================================================================
+# Preferred Skills
+# =============================================================================
+# Nice-to-have skills with lower weight
+
+preferred_skills:
+  - name: "CI/CD"
+    weight: 5
+    keywords:
+      - "ci/cd"
+      - "jenkins"
+      - "github actions"
+      - "gitlab ci"
+      - "continuous integration"
+  
+  - name: "Testing"
+    weight: 5
+    keywords:
+      - "unit test"
+      - "pytest"
+      - "tdd"
+      - "test driven"
+      - "integration test"
+  
+  - name: "Agile"
+    weight: 3
+    keywords:
+      - "agile"
+      - "scrum"
+      - "kanban"
+      - "sprint"
+
+# =============================================================================
+# Hard Constraints
+# =============================================================================
+# These are pass/fail criteria. Failing any triggers automatic rejection.
+# Each constraint includes a reject_reason_id from Greenhouse.
+
+hard_constraints:
+  # Minimum years of experience
+  - type: "years_experience"
+    minimum: 3
+    reject_reason_id: 12345  # Replace with your Greenhouse rejection reason ID
+  
+  # Required education level (comment out if not required)
+  # - type: "education"
+  #   level: "bachelor"
+  #   reject_reason_id: 12346
+
+# =============================================================================
+# Score Thresholds
+# =============================================================================
+# These determine automated actions based on score
+
+thresholds:
+  # Score >= this: auto-advance to next stage
+  advance: 75
+  
+  # Score <= this: auto-reject
+  reject: 25
+  
+  # Score between reject and this: put in human review queue
+  human_review: 50
+
+# =============================================================================
+# Stage Automation Rules
+# =============================================================================
+# Define which stages trigger automation
+
+stage_automation:
+  # Stage ID where scoring should run
+  scoring_stage_id: null  # Replace with your stage ID
+  
+  # Stage ID to advance to after passing score
+  advance_to_stage_id: null  # Replace with your stage ID
+  
+  # Enable/disable auto-rejection
+  auto_reject_enabled: true
+  
+  # Email template ID for rejection emails (optional)
+  rejection_email_template_id: null  # Replace with your template ID
+
+# =============================================================================
+# Job-Specific Overrides
+# =============================================================================
+# You can define job-specific rubrics that override the defaults
+
+job_overrides:
+  # Example: Engineering Manager role
+  # 12345:  # Job ID
+  #   required_skills:
+  #     - name: "Team Leadership"
+  #       weight: 25
+  #       keywords:
+  #         - "managed"
+  #         - "led team"
+  #         - "leadership"
+  #   hard_constraints:
+  #     - type: "years_experience"
+  #       minimum: 5
+  #       reject_reason_id: 12347

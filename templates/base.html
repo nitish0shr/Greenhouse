@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Recruiter Autopilot{% endblock %}</title>
+    <link rel="stylesheet" href="/static/css/styles.css">
+    {% block head %}{% endblock %}
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-brand">
+            <a href="/admin/">🤖 Recruiter Autopilot</a>
+        </div>
+        <div class="nav-links">
+            <a href="/admin/" class="{% if request.url.path == '/admin/' %}active{% endif %}">Dashboard</a>
+            <a href="/admin/queue" class="{% if request.url.path == '/admin/queue' %}active{% endif %}">Queue</a>
+            <a href="/admin/review" class="{% if request.url.path == '/admin/review' %}active{% endif %}">Review</a>
+        </div>
+        <div class="nav-user">
+            <span>{{ admin_user }}</span>
+        </div>
+    </nav>
+
+    <main class="container">
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer class="footer">
+        <p>Recruiter Autopilot &copy; {{ now().year if now else 2024 }}</p>
+    </footer>
+
+    {% block scripts %}{% endblock %}
+</body>
+</html>

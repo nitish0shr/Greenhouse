@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Recruiter Autopilot{% endblock %}
+
+{% block content %}
+<div class="dashboard">
+    <h1>Dashboard</h1>
+
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-value">{{ stats.total_applications }}</div>
+            <div class="stat-label">Total Applications</div>
+        </div>
+        <div class="stat-card pending">
+            <div class="stat-value">{{ stats.pending }}</div>
+            <div class="stat-label">Pending</div>
+        </div>
+        <div class="stat-card completed">
+            <div class="stat-value">{{ stats.completed }}</div>
+            <div class="stat-label">Completed</div>
+        </div>
+        <div class="stat-card review">
+            <div class="stat-value">{{ stats.review_queue }}</div>
+            <div class="stat-label">
+                <a href="/admin/review">Review Queue</a>
+            </div>
+        </div>
+    </div>
+
+    <div class="score-stats">
+        <h3>Score Statistics</h3>
+        <div class="score-grid">
+            <div class="score-item">
+                <span class="label">Average:</span>
+                <span class="value">{{ stats.avg_score }}</span>
+            </div>
+            <div class="score-item">
+                <span class="label">Min:</span>
+                <span class="value">{{ stats.min_score }}</span>
+            </div>
+            <div class="score-item">
+                <span class="label">Max:</span>
+                <span class="value">{{ stats.max_score }}</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="recent-section">
+        <h2>Recent Applications</h2>
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>GH ID</th>
+                    <th>Job</th>
+                    <th>Score</th>
+                    <th>Status</th>
+                    <th>Decision</th>
+                    <th>Created</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for app in recent_applications %}
+                <tr>
+                    <td>
+                        <a href="/admin/candidates/{{ app.candidate_id }}">
+                            {{ app.greenhouse_id }}
+                        </a>
+                    </td>
+                    <td>{{ app.job_name[:40] }}{% if app.job_name|length > 40 %}...{% endif %}</td>
+                    <td>
+                        {% if app.score is not none %}
+                        <span class="score-badge 
+                            {% if app.score >= 75 %}high
+                            {% elif app.score >= 50 %}medium
+                            {% else %}low{% endif %}">
+                            {{ app.score|round(1) }}
+                        </span>
+                        {% else %}
+                        -
+                        {% endif %}
+                    </td>
+                    <td>
+                        <span class="status-badge {{ app.processing_status }}">
+                            {{ app.processing_status }}
+                        </span>
+                    </td>
+                    <td>{{ app.auto_decision or '-' }}</td>
+                    <td>{{ app.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="6" class="empty">No applications yet</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

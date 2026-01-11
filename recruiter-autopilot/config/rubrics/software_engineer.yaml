@@ -1,0 +1,162 @@
+# Software Engineer Rubric
+# Version: 1.0
+#
+# This rubric evaluates candidates for software engineering positions.
+# Customize weights and thresholds based on your specific requirements.
+
+name: "Software Engineer Rubric"
+version: "1.0"
+description: |
+  Standard rubric for evaluating software engineering candidates.
+  Focuses on experience, technical skills, education, and leadership potential.
+
+# Scoring dimensions - weights must sum to 1.0
+dimensions:
+  experience:
+    weight: 0.35
+    description: "Years and quality of relevant work experience"
+    scoring:
+      0-2_years: 3
+      2-5_years: 6
+      5-10_years: 8
+      10+_years: 10
+    evaluation_notes: |
+      Consider:
+      - Relevance of experience to the role
+      - Progression and growth
+      - Quality of companies worked at
+      - Impact and scope of work
+
+  skills:
+    weight: 0.40
+    description: "Technical skills alignment with job requirements"
+    required_any:
+      - python
+      - java
+      - javascript
+      - typescript
+      - go
+      - c++
+      - rust
+    preferred:
+      - kubernetes
+      - docker
+      - aws
+      - gcp
+      - postgresql
+      - redis
+      - react
+      - fastapi
+      - django
+    scoring:
+      all_required_plus_preferred: 10
+      all_required: 7
+      some_required: 4
+      none: 0
+    evaluation_notes: |
+      Strong candidates demonstrate:
+      - Deep expertise in at least one required language
+      - Breadth across multiple technologies
+      - Cloud and infrastructure experience
+
+  education:
+    weight: 0.15
+    description: "Educational background and continuous learning"
+    degree_scores:
+      PhD: 10
+      MS: 9
+      MBA: 8
+      BS: 7
+      BA: 6
+      bootcamp: 5
+      self_taught: 5
+    evaluation_notes: |
+      Education is less important for experienced candidates.
+      Look for signs of continuous learning (certifications, courses).
+
+  leadership:
+    weight: 0.10
+    description: "Leadership, mentoring, and communication skills"
+    indicators:
+      - managed team
+      - mentored engineers
+      - led projects
+      - technical lead
+      - architect role
+      - open source contributions
+    evaluation_notes: |
+      Important for senior roles.
+      Look for evidence of influence beyond direct reports.
+
+# Hard constraints - automatic rejection if not met
+hard_constraints:
+  - name: min_experience
+    type: years
+    min: 1
+    reject_message: "Less than 1 year of relevant experience"
+
+  - name: required_programming_language
+    type: skill
+    skills:
+      - python
+      - java
+      - javascript
+      - go
+      - c++
+    reject_message: "No experience with required programming languages"
+
+# Tier thresholds (percentage scores)
+tier_thresholds:
+  A: 0.80  # Top candidates - auto-advance
+  B: 0.65  # Good candidates - proceed with interview
+  C: 0.45  # Below bar - hold or reject
+
+# Confidence settings
+confidence_settings:
+  threshold: 0.7
+  low_confidence_triggers_review: true
+  low_confidence_message: "Resume parsing confidence below threshold"
+
+# Conditions that trigger human review
+review_triggers:
+  - condition: "tier == 'B' and confidence < 0.75"
+    reason: "Borderline candidate with low parsing confidence"
+
+  - condition: "missing_info contains 'work_experience'"
+    reason: "Work experience details unclear"
+
+  - condition: "tier == 'A' and total_years_experience < 3"
+    reason: "High score but limited experience - verify"
+
+# Actions based on tier
+tier_actions:
+  A:
+    - advance_to_stage: "Phone Screen"
+    - send_email: "interview_invite"
+    - add_tags:
+      - "tier:A"
+      - "fast-track"
+
+  B:
+    - advance_to_stage: "Application Review"
+    - add_tags:
+      - "tier:B"
+
+  C:
+    - add_tags:
+      - "tier:C"
+      - "needs-review"
+    - flag_for_review: true
+
+# Metadata
+metadata:
+  created_by: "Recruiting Team"
+  created_at: "2024-01-15"
+  last_modified: "2024-01-15"
+  applicable_jobs:
+    - "Software Engineer"
+    - "Senior Software Engineer"
+    - "Staff Engineer"
+  notes: |
+    This rubric is designed for IC engineering roles.
+    For management roles, increase leadership weight.

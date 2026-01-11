@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+
+{% block title %}Queue Status - Recruiter Autopilot{% endblock %}
+
+{% block content %}
+<div class="queue-page">
+    <h1>Queue Status</h1>
+
+    <section class="queue-section">
+        <h2>Pending/Processing Webhooks</h2>
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Event ID</th>
+                    <th>Type</th>
+                    <th>Status</th>
+                    <th>Application</th>
+                    <th>Received</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for event in pending_webhooks %}
+                <tr>
+                    <td><code>{{ event.greenhouse_event_id[:20] }}...</code></td>
+                    <td>{{ event.event_type }}</td>
+                    <td>
+                        <span class="status-badge {{ event.status }}">
+                            {{ event.status }}
+                        </span>
+                    </td>
+                    <td>{{ event.application_id or '-' }}</td>
+                    <td>{{ event.received_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="5" class="empty">No pending webhooks</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </section>
+
+    <section class="queue-section">
+        <h2>Failed Webhooks</h2>
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Event ID</th>
+                    <th>Type</th>
+                    <th>Error</th>
+                    <th>Application</th>
+                    <th>Received</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for event in failed_webhooks %}
+                <tr class="error-row">
+                    <td><code>{{ event.greenhouse_event_id[:20] }}...</code></td>
+                    <td>{{ event.event_type }}</td>
+                    <td class="error-message">
+                        {{ event.error_message[:100] if event.error_message else '-' }}
+                        {% if event.error_message and event.error_message|length > 100 %}...{% endif %}
+                    </td>
+                    <td>{{ event.application_id or '-' }}</td>
+                    <td>{{ event.received_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="5" class="empty">No failed webhooks</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </section>
+</div>
+{% endblock %}

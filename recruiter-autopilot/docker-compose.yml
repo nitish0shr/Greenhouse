@@ -1,0 +1,121 @@
+version: "3.9"
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: recruiter_autopilot_db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: recruiter_autopilot
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis (Celery broker & result backend)
+  redis:
+    image: redis:7-alpine
+    container_name: recruiter_autopilot_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # FastAPI Application
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: recruiter_autopilot_api
+    command: uvicorn src.api.app:create_app --host 0.0.0.0 --port 8000 --factory --reload
+    ports:
+      - "8000:8000"
+    environment:
+      - APP_ENV=development
+      - DEBUG=true
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/recruiter_autopilot
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/2
+      - MOCK_MODE=true
+    volumes:
+      - .:/app
+      - pip_cache:/root/.cache/pip
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # Celery Worker
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: recruiter_autopilot_worker
+    command: celery -A src.workers.celery_app worker --loglevel=info --concurrency=2
+    environment:
+      - APP_ENV=development
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/recruiter_autopilot
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/2
+      - MOCK_MODE=true
+    volumes:
+      - .:/app
+      - pip_cache:/root/.cache/pip
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # Celery Beat (Scheduled Tasks)
+  beat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: recruiter_autopilot_beat
+    command: celery -A src.workers.celery_app beat --loglevel=info
+    environment:
+      - APP_ENV=development
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/recruiter_autopilot
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/2
+    volumes:
+      - .:/app
+    depends_on:
+      - worker
+
+  # Flower (Celery monitoring) - optional
+  flower:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: recruiter_autopilot_flower
+    command: celery -A src.workers.celery_app flower --port=5555
+    ports:
+      - "5555:5555"
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/1
+    depends_on:
+      - redis
+      - worker
+
+volumes:
+  postgres_data:
+  redis_data:
+  pip_cache:
