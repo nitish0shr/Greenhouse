@@ -30,7 +30,14 @@ class Settings(BaseSettings):
     # API Server
     # -------------------------------------------------------------------------
     api_host: str = "0.0.0.0"
-    api_port: int = 8000
+    api_port: int = Field(default=8000)
+    
+    @field_validator("api_port", mode="before")
+    @classmethod
+    def parse_port(cls, v):
+        """Parse PORT from environment (Railway, Heroku, etc.)."""
+        import os
+        return int(os.getenv("PORT", v))
     
     # -------------------------------------------------------------------------
     # Database
@@ -100,42 +107,7 @@ class Settings(BaseSettings):
     # Mock Mode (for testing and development)
     # -------------------------------------------------------------------------
     mock_mode: bool = False
-
-    # -------------------------------------------------------------------------
-    # Feature Flags (Global defaults - can be overridden in DB)
-    # -------------------------------------------------------------------------
-    enable_autopilot_global: bool = True
-    enable_gh_webhooks: bool = True
-    enable_harvest_writeback: bool = True
-    enable_graph_notifications: bool = True
-    enable_scheduling: bool = True
-    enable_job_board_api: bool = False
-    enable_hris_export: bool = False
-    enable_workday_link: bool = False
-
-    # -------------------------------------------------------------------------
-    # Email & Scheduling
-    # -------------------------------------------------------------------------
-    default_scheduling_mode: str = "propose_slots"  # or "send_link"
-    email_tracking_token_prefix: str = "[APP:"
-    followup_days: int = 3  # Days before sending follow-up
-    scorecard_chase_hours: int = 24  # Hours after interview to chase scorecard
-
-    # -------------------------------------------------------------------------
-    # Rate Limiting & Retry
-    # -------------------------------------------------------------------------
-    greenhouse_rate_limit_per_second: int = 50
-    graph_rate_limit_per_second: int = 100
-    max_retry_attempts: int = 5
-    retry_backoff_base: int = 60  # Base seconds for exponential backoff
-
-    # -------------------------------------------------------------------------
-    # DLQ & Cleanup
-    # -------------------------------------------------------------------------
-    dlq_max_retries: int = 5
-    event_retention_days: int = 90
-    attachment_retention_days: int = 30
-
+    
     # -------------------------------------------------------------------------
     # Computed Properties
     # -------------------------------------------------------------------------

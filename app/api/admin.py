@@ -457,7 +457,7 @@ async def get_candidate_audit_log(
             "triggered_by": log.triggered_by,
             "status": log.status,
             "created_at": log.created_at.isoformat(),
-            "metadata": log.metadata,
+            "metadata": log.metadata_json,
         }
         for log in logs
     ]

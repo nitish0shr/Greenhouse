@@ -79,8 +79,9 @@ class AuditLog(Base):
         nullable=False,
     )
     
-    # Additional metadata
-    metadata: Mapped[dict] = mapped_column(
+    # Additional metadata (using metadata_json as attribute name to avoid SQLAlchemy reserved word conflict)
+    metadata_json: Mapped[dict] = mapped_column(
+        "metadata",
         JSONB,
         nullable=False,
         default=dict,
