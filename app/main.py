@@ -37,9 +37,20 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         logger.warning("Debug mode is enabled - do not use in production!")
     
     # Initialize database (for development only - use migrations in production)
-    if settings.environment == "development":
-        await init_db()
-        logger.info("Database tables initialized")
+    # Skip database initialization in production (use Alembic migrations instead)
+    # Also skip if database is not available (for demo/testing)
+    if settings.environment == "development" and not settings.is_production:
+        try:
+            # Only initialize if DATABASE_URL points to localhost (development)
+            if "localhost" in settings.database_url or "127.0.0.1" in settings.database_url:
+                await init_db()
+                logger.info("Database tables initialized")
+            else:
+                logger.info("Skipping database initialization (non-local database, use migrations)")
+        except Exception as e:
+            logger.warning(f"Database initialization skipped: {e}")
+    else:
+        logger.info("Skipping database initialization (production mode - use migrations)")
     
     logger.info("Startup complete")
     

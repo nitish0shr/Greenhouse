@@ -22,7 +22,9 @@ class Settings(BaseSettings):
     # -------------------------------------------------------------------------
     # Environment
     # -------------------------------------------------------------------------
-    environment: Literal["development", "staging", "production"] = "development"
+    environment: Literal["development", "staging", "production"] = Field(
+        default="development"
+    )
     debug: bool = False
     secret_key: str = Field(default="change-this-to-a-secure-random-string")
     
