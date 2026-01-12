@@ -58,50 +58,61 @@ def verify_admin(credentials: HTTPBasicCredentials = Depends(security)):
 @router.get("/", response_class=HTMLResponse)
 async def admin_dashboard(
     request: Request,
-    session: AsyncSession = Depends(get_async_session),
     admin: str = Depends(verify_admin),
 ):
     """Main admin dashboard with statistics."""
-    # Get queue statistics
-    total_apps = await session.scalar(select(func.count(Application.id)))
-    pending_apps = await session.scalar(
-        select(func.count(Application.id))
-        .where(Application.processing_status == "pending")
-    )
-    completed_apps = await session.scalar(
-        select(func.count(Application.id))
-        .where(Application.processing_status == "completed")
-    )
-    review_queue = await session.scalar(
-        select(func.count(HumanReviewQueue.id))
-        .where(HumanReviewQueue.status == "pending")
-    )
-    
-    # Get recent applications
-    recent_result = await session.execute(
-        select(Application)
-        .order_by(desc(Application.created_at))
-        .limit(10)
-    )
-    recent_apps = recent_result.scalars().all()
-    
-    # Get score distribution
-    score_stats = await session.execute(
-        select(
-            func.avg(Application.score).label("avg"),
-            func.min(Application.score).label("min"),
-            func.max(Application.score).label("max"),
-        )
-        .where(Application.score.isnot(None))
-    )
-    score_row = score_stats.one()
-    
-    return templates.TemplateResponse(
-        "dashboard.html",
-        {
-            "request": request,
-            "admin_user": admin,
-            "stats": {
+    # Default stats (used if database isn't available)
+    stats = {
+        "total_applications": 0,
+        "pending": 0,
+        "completed": 0,
+        "review_queue": 0,
+        "avg_score": 0,
+        "min_score": 0,
+        "max_score": 0,
+    }
+    recent_apps = []
+    db_available = False
+
+    # Try to get database stats (gracefully handle if DB not available)
+    try:
+        from app.database import AsyncSessionLocal
+        async with AsyncSessionLocal() as session:
+            # Get queue statistics
+            total_apps = await session.scalar(select(func.count(Application.id)))
+            pending_apps = await session.scalar(
+                select(func.count(Application.id))
+                .where(Application.processing_status == "pending")
+            )
+            completed_apps = await session.scalar(
+                select(func.count(Application.id))
+                .where(Application.processing_status == "completed")
+            )
+            review_queue = await session.scalar(
+                select(func.count(HumanReviewQueue.id))
+                .where(HumanReviewQueue.status == "pending")
+            )
+
+            # Get recent applications
+            recent_result = await session.execute(
+                select(Application)
+                .order_by(desc(Application.created_at))
+                .limit(10)
+            )
+            recent_apps = recent_result.scalars().all()
+
+            # Get score distribution
+            score_stats = await session.execute(
+                select(
+                    func.avg(Application.score).label("avg"),
+                    func.min(Application.score).label("min"),
+                    func.max(Application.score).label("max"),
+                )
+                .where(Application.score.isnot(None))
+            )
+            score_row = score_stats.one()
+
+            stats = {
                 "total_applications": total_apps or 0,
                 "pending": pending_apps or 0,
                 "completed": completed_apps or 0,
@@ -109,8 +120,21 @@ async def admin_dashboard(
                 "avg_score": round(score_row.avg or 0, 1),
                 "min_score": round(score_row.min or 0, 1),
                 "max_score": round(score_row.max or 0, 1),
-            },
+            }
+            db_available = True
+    except Exception as e:
+        # Database not available - use default stats
+        import logging
+        logging.getLogger(__name__).warning(f"Database not available for admin dashboard: {e}")
+
+    return templates.TemplateResponse(
+        "dashboard.html",
+        {
+            "request": request,
+            "admin_user": admin,
+            "stats": stats,
             "recent_applications": recent_apps,
+            "db_available": db_available,
         },
     )
 
