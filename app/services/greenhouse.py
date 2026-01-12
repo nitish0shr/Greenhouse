@@ -4,7 +4,7 @@
 
 import asyncio
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Optional
 
 import httpx
@@ -12,6 +12,74 @@ import httpx
 from app.config import settings
 
 logger = logging.getLogger(__name__)
+
+
+class OAuthTokenManager:
+    """Manages OAuth 2.0 tokens for Greenhouse Harvest V3 API."""
+
+    def __init__(
+        self,
+        client_id: str,
+        client_secret: str,
+        token_url: str = "https://id.greenhouse.io/oauth/token",
+    ):
+        self.client_id = client_id
+        self.client_secret = client_secret
+        self.token_url = token_url
+        self._access_token: Optional[str] = None
+        self._token_expires_at: Optional[datetime] = None
+
+    @property
+    def is_token_valid(self) -> bool:
+        """Check if current token is still valid (with 5-minute buffer)."""
+        if not self._access_token or not self._token_expires_at:
+            return False
+        return datetime.now() < (self._token_expires_at - timedelta(minutes=5))
+
+    async def get_access_token(self) -> str:
+        """Get a valid access token, refreshing if necessary."""
+        if self.is_token_valid:
+            return self._access_token
+
+        return await self._fetch_new_token()
+
+    async def _fetch_new_token(self) -> str:
+        """Fetch a new access token using client credentials flow."""
+        logger.info("Fetching new OAuth access token from Greenhouse")
+
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(
+                self.token_url,
+                data={
+                    "grant_type": "client_credentials",
+                    "client_id": self.client_id,
+                    "client_secret": self.client_secret,
+                },
+                headers={"Content-Type": "application/x-www-form-urlencoded"},
+            )
+
+            if response.status_code != 200:
+                error_msg = f"Failed to obtain OAuth token: {response.status_code}"
+                try:
+                    error_data = response.json()
+                    error_msg += f" - {error_data}"
+                except Exception:
+                    pass
+                logger.error(error_msg)
+                raise GreenhouseAPIError(error_msg, status_code=response.status_code)
+
+            token_data = response.json()
+            self._access_token = token_data["access_token"]
+            expires_in = token_data.get("expires_in", 3600)  # Default 1 hour
+            self._token_expires_at = datetime.now() + timedelta(seconds=expires_in)
+
+            logger.info(f"Successfully obtained OAuth token, expires in {expires_in}s")
+            return self._access_token
+
+    def invalidate_token(self):
+        """Invalidate the current token (e.g., after a 401 response)."""
+        self._access_token = None
+        self._token_expires_at = None
 
 
 class GreenhouseAPIError(Exception):
@@ -34,51 +102,92 @@ class GreenhouseRateLimitError(GreenhouseAPIError):
 class GreenhouseClient:
     """
     Client for Greenhouse Harvest API.
-    
+
     Features:
+    - OAuth 2.0 client credentials flow (Harvest V3 API)
+    - Fallback to Basic Auth (legacy API key)
     - Automatic rate limit handling with exponential backoff
     - On-Behalf-Of header for write operations
     - Async HTTP requests
     - Attachment download with expiration handling
     """
-    
+
     def __init__(
         self,
         api_key: Optional[str] = None,
         on_behalf_of: Optional[int] = None,
         base_url: Optional[str] = None,
+        client_id: Optional[str] = None,
+        client_secret: Optional[str] = None,
+        token_url: Optional[str] = None,
     ):
         """
         Initialize the Greenhouse client.
-        
+
         Args:
-            api_key: Harvest API key (defaults to config)
+            api_key: Harvest API key (legacy, defaults to config)
             on_behalf_of: User ID for On-Behalf-Of header (defaults to config)
             base_url: API base URL (defaults to config)
+            client_id: OAuth client ID (defaults to config)
+            client_secret: OAuth client secret (defaults to config)
+            token_url: OAuth token URL (defaults to config)
         """
         self.api_key = api_key or settings.greenhouse_api_key
         self.on_behalf_of = on_behalf_of or settings.greenhouse_on_behalf_of
         self.base_url = base_url or settings.greenhouse_api_base_url
-        
+
+        # OAuth credentials
+        self.client_id = client_id or settings.greenhouse_client_id
+        self.client_secret = client_secret or settings.greenhouse_client_secret
+        self.token_url = token_url or settings.greenhouse_token_url
+
+        # Initialize OAuth token manager if OAuth credentials are configured
+        self._token_manager: Optional[OAuthTokenManager] = None
+        if self.client_id and self.client_secret:
+            self._token_manager = OAuthTokenManager(
+                client_id=self.client_id,
+                client_secret=self.client_secret,
+                token_url=self.token_url,
+            )
+            logger.info("Greenhouse client initialized with OAuth 2.0 authentication")
+        elif self.api_key:
+            logger.info("Greenhouse client initialized with Basic Auth (legacy API key)")
+        else:
+            logger.warning("Greenhouse client initialized without authentication credentials")
+
         # Rate limiting state
         self._rate_limit_until: Optional[datetime] = None
         self._consecutive_429s = 0
-        
-    def _get_headers(self, write_operation: bool = False) -> dict:
+
+    @property
+    def uses_oauth(self) -> bool:
+        """Check if client is using OAuth authentication."""
+        return self._token_manager is not None
+
+    async def _get_headers(self, write_operation: bool = False) -> dict:
         """Get headers for API requests."""
         headers = {
             "Content-Type": "application/json",
         }
-        
+
+        # Add OAuth Bearer token if using OAuth
+        if self._token_manager:
+            access_token = await self._token_manager.get_access_token()
+            headers["Authorization"] = f"Bearer {access_token}"
+
         # On-Behalf-Of header is required for write operations
         if write_operation and self.on_behalf_of:
             headers["On-Behalf-Of"] = str(self.on_behalf_of)
-        
+
         return headers
-    
-    def _get_auth(self) -> httpx.BasicAuth:
-        """Get Basic auth with API key as username."""
-        return httpx.BasicAuth(self.api_key, "")
+
+    def _get_auth(self) -> Optional[httpx.BasicAuth]:
+        """Get Basic auth with API key as username (legacy authentication)."""
+        if self._token_manager:
+            return None  # Using OAuth, no Basic Auth needed
+        if self.api_key:
+            return httpx.BasicAuth(self.api_key, "")
+        return None
     
     async def _handle_rate_limit(self, response: httpx.Response) -> int:
         """
@@ -116,27 +225,29 @@ class GreenhouseClient:
     ) -> dict:
         """
         Make an API request with rate limit handling.
-        
+
         Args:
             method: HTTP method
             endpoint: API endpoint (without base URL)
             write_operation: Whether this is a write operation
             max_retries: Maximum number of retries for rate limits
             **kwargs: Additional arguments for httpx request
-        
+
         Returns:
             JSON response data
-        
+
         Raises:
             GreenhouseAPIError: On API errors
             GreenhouseRateLimitError: When rate limit exhausted after retries
         """
         url = f"{self.base_url}{endpoint}"
-        headers = self._get_headers(write_operation)
         auth = self._get_auth()
-        
+
         for attempt in range(max_retries + 1):
             try:
+                # Get headers (async because it may fetch OAuth token)
+                headers = await self._get_headers(write_operation)
+
                 async with httpx.AsyncClient(timeout=30.0) as client:
                     response = await client.request(
                         method=method,
@@ -145,7 +256,7 @@ class GreenhouseClient:
                         auth=auth,
                         **kwargs,
                     )
-                    
+
                     # Handle rate limiting
                     if response.status_code == 429:
                         if attempt < max_retries:
@@ -154,10 +265,22 @@ class GreenhouseClient:
                             continue
                         else:
                             raise GreenhouseRateLimitError()
-                    
+
+                    # Handle 401 Unauthorized - invalidate OAuth token and retry
+                    if response.status_code == 401 and self._token_manager:
+                        if attempt < max_retries:
+                            logger.warning("Received 401, invalidating OAuth token and retrying")
+                            self._token_manager.invalidate_token()
+                            continue
+                        else:
+                            raise GreenhouseAPIError(
+                                "Authentication failed after token refresh",
+                                status_code=401,
+                            )
+
                     # Reset consecutive 429 counter on success
                     self._consecutive_429s = 0
-                    
+
                     # Handle other errors
                     if response.status_code >= 400:
                         error_data = None
@@ -165,19 +288,19 @@ class GreenhouseClient:
                             error_data = response.json()
                         except Exception:
                             pass
-                        
+
                         raise GreenhouseAPIError(
                             f"API error: {response.status_code}",
                             status_code=response.status_code,
                             response=error_data,
                         )
-                    
+
                     # Return JSON response (or empty dict for 204)
                     if response.status_code == 204:
                         return {}
-                    
+
                     return response.json()
-                    
+
             except httpx.TimeoutException as e:
                 logger.warning(f"Request timeout on attempt {attempt + 1}: {e}")
                 if attempt == max_retries:

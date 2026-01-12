@@ -52,17 +52,28 @@ class Settings(BaseSettings):
     # -------------------------------------------------------------------------
     # Greenhouse Integration
     # -------------------------------------------------------------------------
+    # Legacy API key (for backward compatibility)
     greenhouse_api_key: str = ""
     greenhouse_webhook_secret: str = ""
     greenhouse_on_behalf_of: int = 0
     greenhouse_api_base_url: str = "https://harvest.greenhouse.io/v1"
-    
+
+    # OAuth 2.0 credentials for Harvest V3 API
+    greenhouse_client_id: str = ""
+    greenhouse_client_secret: str = ""
+    greenhouse_token_url: str = "https://id.greenhouse.io/oauth/token"
+
     @field_validator("greenhouse_api_key", "greenhouse_webhook_secret")
     @classmethod
     def validate_greenhouse_config(cls, v: str, info) -> str:
         """Warn if Greenhouse credentials are missing in production."""
         # Validation happens at runtime, not during class definition
         return v
+
+    @property
+    def greenhouse_oauth_configured(self) -> bool:
+        """Check if OAuth credentials are configured."""
+        return bool(self.greenhouse_client_id and self.greenhouse_client_secret)
     
     # -------------------------------------------------------------------------
     # Microsoft Graph
