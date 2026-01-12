@@ -33,10 +33,21 @@ target_metadata = Base.metadata
 def get_url() -> str:
     """Get database URL from environment."""
     # Use sync URL for Alembic (it doesn't support async)
-    return os.getenv(
-        "DATABASE_URL_SYNC",
-        "postgresql://recruiter:recruiter_pass@localhost:5432/recruiter_autopilot"
-    )
+    # Priority: DATABASE_URL_SYNC > DATABASE_URL (converted) > default
+    url = os.getenv("DATABASE_URL_SYNC")
+    if url:
+        return url
+
+    # Try DATABASE_URL and convert async driver to sync if needed
+    url = os.getenv("DATABASE_URL")
+    if url:
+        # Convert asyncpg to psycopg2 (sync driver) if present
+        if "postgresql+asyncpg://" in url:
+            url = url.replace("postgresql+asyncpg://", "postgresql://")
+        return url
+
+    # Default for local development
+    return "postgresql://recruiter:recruiter_pass@localhost:5432/recruiter_autopilot"
 
 
 def run_migrations_offline() -> None:

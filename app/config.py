@@ -43,6 +43,24 @@ class Settings(BaseSettings):
     database_url_sync: str = Field(
         default="postgresql://recruiter:recruiter_pass@localhost:5432/recruiter_autopilot"
     )
+
+    @field_validator("database_url")
+    @classmethod
+    def validate_database_url(cls, v: str) -> str:
+        """Ensure database URL uses asyncpg driver for async operations."""
+        if v and v.startswith("postgresql://"):
+            # Convert standard postgresql:// to postgresql+asyncpg://
+            return v.replace("postgresql://", "postgresql+asyncpg://", 1)
+        return v
+
+    @field_validator("database_url_sync")
+    @classmethod
+    def validate_database_url_sync(cls, v: str, info) -> str:
+        """Ensure sync database URL uses standard postgresql driver."""
+        if v and "postgresql+asyncpg://" in v:
+            # Convert async URL to sync
+            return v.replace("postgresql+asyncpg://", "postgresql://", 1)
+        return v
     
     # -------------------------------------------------------------------------
     # Redis
